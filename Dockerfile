@@ -7,18 +7,35 @@
 # Want to help us make this template better? Share your feedback here: https://forms.gle/ybq9Krt8jtBL3iCk7
 
 ################################################################################
-
-# Create a stage for resolving and downloading dependencies.
-FROM eclipse-temurin:21-jdk-jammy as deps
+# Create a base stage with common instructions for both test and deps stages
+FROM eclipse-temurin:21-jdk-jammy as base
 WORKDIR /build
 # Copy the mvnw wrapper with executable permissions.
 COPY --chmod=0755 mvnw mvnw
 COPY .mvn/ .mvn/
+
+################################################################################
+# Create a test stage for running testing commands
+FROM base as test
+WORKDIR /build
+# Copy in the necessary source files
+COPY ./src src/
+# Run mvnw test goal. The RUN instruction runs when the image is being built. When using RUN, the build will fail if the tests fail
+RUN --mount=type=bind,source=pom.xml,target=pom.xml \
+    --mount=type=cache,target=/root/.m2 \
+    ./mvnw test
+
+################################################################################
+
+# Create a stage for resolving and downloading dependencies.
+FROM base as deps
+WORKDIR /build
 # Download dependencies as a separate step to take advantage of Docker's caching.
 # Leverage a cache mount to /root/.m2 so that subsequent builds don't have to
 # re-download packages.
 RUN --mount=type=bind,source=pom.xml,target=pom.xml \
-    --mount=type=cache,target=/root/.m2 ./mvnw dependency:go-offline -DskipTests
+    --mount=type=cache,target=/root/.m2 \
+    ./mvnw dependency:go-offline -DskipTests
 
 ################################################################################
 
